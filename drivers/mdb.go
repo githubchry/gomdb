@@ -36,7 +36,7 @@ func Connect() *mongo.Client {
 		log.Fatal(err)
 	}
 
-	// 检查链接
+	// 检查连接
 	err = client.Ping(context.TODO(), nil)
 	if err != nil {
 		log.Fatal(err)
