@@ -3,7 +3,6 @@ package models
 import (
 	"context"
 	"fmt"
-	_ "fmt"
 	"log"
 	"strconv"
 	"time"
@@ -33,7 +32,7 @@ func NewMgo() *Mgo {
 func (m *Mgo) InsertOne(document interface{}) (insertResult *mongo.InsertOneResult) {
 	insertResult, err := m.collection.InsertOne(context.TODO(), document)
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 	}
 	return
 }
@@ -42,7 +41,7 @@ func (m *Mgo) InsertOne(document interface{}) (insertResult *mongo.InsertOneResu
 func (m *Mgo) InsertMany(documents []interface{}) (insertManyResult *mongo.InsertManyResult) {
 	insertManyResult, err := m.collection.InsertMany(context.TODO(), documents)
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 	}
 	return
 }
@@ -80,7 +79,7 @@ func (m *Mgo) FindAll(Skip, Limit int64, sort int) *mongo.Cursor {
 
 	cur, err := m.collection.Find(context.TODO(), filter, findOptions)
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 	}
 
 	return cur
@@ -101,7 +100,7 @@ func (m *Mgo) Delete(key string, value interface{}) int64 {
 	filter := bson.D{{key, value}}
 	count, err := m.collection.DeleteOne(context.TODO(), filter, nil)
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 	}
 	return count.DeletedCount
 
@@ -112,7 +111,7 @@ func (m *Mgo) DeleteMany(key string, value interface{}) int64 {
 	filter := bson.D{{key, value}}
 	count, err := m.collection.DeleteMany(context.TODO(), filter)
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 	}
 	return count.DeletedCount
 }
