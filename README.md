@@ -7,6 +7,10 @@ service mongodb start
 进入mongo shell
 mongo
 
+创建超级用户
+use admin
+db.createUser({user:"admin", pwd:"admin",roles:[{role: "root", db: "admin"}]})
+ 
 查看dbs列表
 > show dbs
 admin   0.000GB
@@ -17,6 +21,8 @@ test    0.000GB
 切换到其中一个db
 > use test
 switched to db test
+为当前db创建用户
+db.createUser({user:"chry", pwd:"chry",roles:["readWrite"]})
 
 创建collection(集合)
 > db.createCollection("trainer")
@@ -72,3 +78,6 @@ WriteResult({ "nMatched" : 1, "nUpserted" : 0, "nModified" : 1 })
 删除文档：
 db.student.deleteOne({name:"李四"});
 ```
+
+
+

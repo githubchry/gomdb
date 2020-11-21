@@ -2,19 +2,15 @@ package models
 
 import (
 	"context"
-	"fmt"
+	"github.com/githubchry/gomdb/drivers"
 	"log"
 	"strconv"
 	"time"
 
-	"github.com/githubchry/gomdb/drivers"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
-
-// 集合名称
-const TrainerCollectionName = "trainer"
 
 // TrainerModel
 type Mgo struct {
@@ -22,9 +18,9 @@ type Mgo struct {
 }
 
 // NewTrainer
-func NewMgo() *Mgo {
+func NewMgo(collection string) *Mgo {
 	mgo := new(Mgo)
-	mgo.collection = drivers.MgoClient.Database(drivers.MgoDbName).Collection(TrainerCollectionName)
+	mgo.collection = drivers.MongoDbConn.Database(drivers.MongoDbName).Collection(collection)
 	return mgo
 }
 
@@ -32,7 +28,7 @@ func NewMgo() *Mgo {
 func (m *Mgo) InsertOne(document interface{}) (insertResult *mongo.InsertOneResult) {
 	insertResult, err := m.collection.InsertOne(context.TODO(), document)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("??",err)
 	}
 	return
 }
@@ -51,7 +47,7 @@ func (m *Mgo) FindOne(key string, value interface{}) *mongo.SingleResult {
 	filter := bson.D{{key, value}}
 	singleResult := m.collection.FindOne(context.TODO(), filter)
 	if singleResult != nil {
-		fmt.Println(singleResult)
+		//log.Println(singleResult)
 	}
 	return singleResult
 }
