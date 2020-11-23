@@ -22,10 +22,12 @@ var MongoDbName string
 // 初始化
 func MongoDBInit(cfg MongoCfg) error {
 	var err error
-
 	MongoDbName = cfg.DBName
-	// 设置客户端参数	"mongodb://chry:chry@localhost:27017/?authSource=test"
-	//url := "mongodb://" + cfg.Addr + ":" + strconv.Itoa(cfg.Port) + "/?authSource=" + cfg.DBName
+
+	// 设置客户端参数
+	//auth模式url示例:	"mongodb://chry:chry@localhost:27017/?authSource=test"
+	//非auth模式url示例:	"mongodb://localhost:27017/?authSource=test"
+	//处理url上面的参数, 还可以设置连接数，连接时间，socket时间，超时时间等: clientOptions.SetConnectTimeout(100000)
 	url := "mongodb://" + cfg.Username + ":" + cfg.Password + "@" + cfg.Addr + ":" + strconv.Itoa(cfg.Port) + "/?authSource=" + cfg.DBName
 	clientOptions := options.Client().ApplyURI(url)
 

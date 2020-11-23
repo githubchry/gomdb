@@ -1,6 +1,8 @@
 package testdata
 
 import (
+	"github.com/githubchry/gomdb/models"
+	"log"
 	"math/rand"
 	"time"
 )
@@ -28,37 +30,28 @@ type Describe struct {
 }
 
 type Pedestrian struct {
-	Location  [2]float64 `json:"location"`
-	timestamp uint64     `json:"timestamp"`
-	ImgUrl    string     `json:"imgUrl"`
-	Desc      Describe   `json:"desc"`
+	EventId	  	uint64   	`json:"eventId"`
+	Location  	[2]float64 	`json:"location"`
+	Timestamp 	uint64     	`json:"timestamp"`
+	ImgUrl    	string     	`json:"imgUrl"`
+	Desc      	Describe   	`json:"desc"`
 }
+
+var gIntCNT int64
 
 //生成随机数
 func genRandomNum(min, max int) int {
 	//设置随机数种子
-	rand.Seed(time.Now().UnixNano())
+	rand.Seed(time.Now().UnixNano()+gIntCNT)
 	return rand.Intn(max-min) + min
 }
-
-//生成布尔值
-func genRandomBool() bool {
-	//设置随机数种子
-	rand.Seed(time.Now().UnixNano())
-	if rand.Int() % 2 != 0 {
-		return true
-	} else {
-		return false
-	}
-}
-
 
 //生成随机字符串
 func  genRandomString(l int) string {
 	str := "0123456789abcdefghijklmnopqrstuvwxyz"
 	bytes := []byte(str)
 	result := []byte{}
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	r := rand.New(rand.NewSource(time.Now().UnixNano()+gIntCNT))
 	for i := 0; i < l; i++ {
 		result = append(result, bytes[r.Intn(len(bytes))])
 	}
@@ -73,12 +66,20 @@ var arr [2]string
 func getRandomColorArr() []string{
 	var len = len(color_arr)
 	arr[0] = color_arr[genRandomNum(0,len - 1)]
-	arr[1] = color_arr[genRandomNum(0,len - 2)]
+	arr[1] = color_arr[genRandomNum(1,len - 1)]
 	return arr[:];
+}
+
+var gbool bool
+func genGBool() bool {
+	gbool = !gbool
+	return gbool
 }
 
 //生成随机字符串
 func SetRandomPedestrian(p *Pedestrian){
+
+	gIntCNT++;
 	/*
 	中国四极范围:
 	135.230000
@@ -93,16 +94,69 @@ func SetRandomPedestrian(p *Pedestrian){
 	2001-01-01 00:00:00 => 978278400
 	2021-01-01 00:00:00 => 1609430400
 	*/
-	p.timestamp = uint64(genRandomNum(978278400,1609430400))
+	p.Timestamp = uint64(genRandomNum(978278400,1609430400))
 	p.ImgUrl = genRandomString(10)
+	p.EventId = uint64(gIntCNT);
 
-	p.Desc.Face.IsWearMask = genRandomBool()
-	p.Desc.Face.IsWearGlasses = genRandomBool()
-	p.Desc.Face.AgeRange = int8(genRandomNum(1,100))
-	p.Desc.Face.Gender = int8(genRandomNum(1,2))
+	p.Desc.Face.IsWearMask = genGBool()
+	p.Desc.Face.IsWearGlasses = genGBool()
+	p.Desc.Face.AgeRange = int8(gIntCNT % 100)+1
+	p.Desc.Face.Gender = int8(gIntCNT % 2)+1
 
-	p.Desc.Body.IsWearHat = genRandomBool()
-	p.Desc.Body.IsWearBackpack = genRandomBool()
+	p.Desc.Body.IsWearHat = genGBool()
+	p.Desc.Body.IsWearBackpack = genGBool()
 	p.Desc.Body.DressColor = getRandomColorArr()
-
 }
+
+
+// 插入随机数据每次插入batch条,共插入count次 共count*batch条, 注意一次插入不要超过48M
+func InsertRandomPedestrian(mgo *models.Mdb, batch, count int){
+	var p Pedestrian
+	pedestrians := [1000]interface{}{}
+	// 2000 * 1000
+	timeStart := time.Now()
+	for i := 0; i < count; i++ {
+		timeStart := time.Now()
+		for j := 0; j < batch; j++ {
+			//每次写入1000条数据
+			SetRandomPedestrian(&p)
+			pedestrians[j] = p
+		}
+		log.Printf("1000 SetRandomPedestrian need: %v\n", time.Since(timeStart))
+		timeStart = time.Now()
+		mgo.InsertMany(pedestrians[:])
+		log.Printf("Inserted %d documents need: %v\n", len(pedestrians), time.Since(timeStart))
+	}
+
+	log.Println("Inserted 2000000 documents need:", time.Since(timeStart))
+}
+
+
+// 插入随机数据每次插入batch条,共插入count次 共count*batch条, 注意一次插入不要超过48M
+func DeletePedestrianCollection(mgo *models.Mdb){
+	err := mgo.DeleteCollection()
+	if err != nil {
+		log.Println("DeleteCollection:", err)
+	}
+}
+
+
+/*
+测试结果:
+插入200W条, 每次1000条, 插入2000次:耗时202秒
+
+eventid不是索引的情况下
+> show dbs
+chrydb  0.149GB
+查询eventid字段, 查询一个不存在的实体, 首次查询1200ms左右, 后面耗时960ms左右 -- 缓存的作用
+查询eventid字段, 查询findOne出来的实体(第一个), 3ms左右 -- 关乎插入时间, 默认的排序
+查询eventid字段, 查询db.pedestrian.find().limit(1).sort({_id:-1})出来的实体(最后一个), 960ms左右 -- 遍历耗时
+
+接下来对eventid字段建立索引  耗时4s左右
+> show dbs
+chrydb  0.174GB
+查询eventid字段, 查询一个不存在的实体, 耗时3ms左右
+查询eventid字段, 查询findOne出来的实体(第一个), 耗时2ms左右
+查询eventid字段, 查询db.pedestrian.find().limit(1).sort({_id:-1})出来的实体(最后一个), 3ms左右
+
+*/

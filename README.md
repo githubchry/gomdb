@@ -1,4 +1,6 @@
 # gomdb
+https://segmentfault.com/a/1190000020362675
+
 ```
 sudo apt install mongodb
 mongo -version
