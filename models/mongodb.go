@@ -122,10 +122,9 @@ func (m *Mdb) FindAll(skip, limit int64, _sort int) *mongo.Cursor {
 }
 
 // 查询集合文档总数
-func (m *Mdb) Count() (string, int64) {
-	name := m.collection.Name()
+func (m *Mdb) Count() int64 {
 	size, _ := m.collection.EstimatedDocumentCount(context.TODO())
-	return name, size
+	return size
 }
 
 // 获取集合创建时间和编号 没什么卵用
