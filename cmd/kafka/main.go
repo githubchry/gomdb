@@ -77,7 +77,7 @@ func main() {
 		log.Println("已经发送消息到kafka...")
 	}
 
-	
+
 	//删除 topic
 	models.DeleteTopics([]string{"hello", "world", "test"})
 
