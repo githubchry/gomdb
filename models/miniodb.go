@@ -90,7 +90,7 @@ func FPutObject(bucketName, objName, filePath, contentType string) error {
 	if err != nil {
 		return err
 	}
-	log.Println("Successfully uploaded object: ", uploadInfo)
+	log.Println("Successfully uploaded file object: ", uploadInfo)
 	return nil
 }
 
@@ -124,7 +124,9 @@ func GetObject(bucketName, objName string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	var obj []byte
+
+	stat, _ := object.Stat()
+	obj := make([]byte, stat.Size)
 	object.Read(obj)
 
 	return obj, nil
@@ -143,6 +145,7 @@ func RemoveObject(bucketName, objName string) error {
 
 // 删除多个文件对象
 func RemoveObjects(bucketName string, objectsCh <-chan string) {
+
 	for rErr := range drivers.MinioDbConn.RemoveObjects(bucketName, objectsCh) {
 		log.Println("Error detected during deletion: ", rErr)
 	}
