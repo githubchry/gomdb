@@ -1,10 +1,10 @@
 package models
 
 import (
-	"github.com/githubchry/gomdb/drivers"
 	"errors"
+	"github.com/githubchry/gomdb/drivers"
 	"github.com/milvus-io/milvus-sdk-go/milvus"
-	"strconv"
+	"log"
 )
 
 //获取配置信息
@@ -12,11 +12,9 @@ func GetConfig() (string, error) {
 	//GetConfig
 	configInfo, status, _ := drivers.MilvusDbConn.GetConfig("*")
 	if !status.Ok() {
-		println("Get config failed: " + status.GetMessage())
+		log.Println("Get config failed: " + status.GetMessage())
 		return configInfo, errors.New(status.GetMessage())
 	}
-	println("config: ")
-	println(configInfo)
 	return configInfo, nil
 }
 
@@ -26,6 +24,8 @@ collectionName 集合名称
 dimension 维度
 index_file_size 自动创建索引的数据文件大小, 单位为M
 metricType 距离度量方式
+
+一个集合collection可以有多个分区partition, 一个分区可以有多个数据段segment
 */
 func CreateCollection(collectionName string, dimension, indexFileSize, metricType int64) {
 	//1.准备创建集合所需参数：
@@ -34,31 +34,31 @@ func CreateCollection(collectionName string, dimension, indexFileSize, metricTyp
 	var hasCollection bool
 	hasCollection, status, err := drivers.MilvusDbConn.HasCollection(collectionName)
 	if err != nil {
-		println("HasCollection rpc failed: " + err.Error())
+		log.Println("HasCollection rpc failed: " + err.Error())
 	}
 	if hasCollection == false {
 		status, err = drivers.MilvusDbConn.CreateCollection(collectionParam)
 		if err != nil {
-			println("CreateCollection rpc failed: " + err.Error())
+			log.Println("CreateCollection rpc failed: " + err.Error())
 			return
 		}
 		if !status.Ok() {
-			println("Create collection failed: " + status.GetMessage())
+			log.Println("Create collection failed: " + status.GetMessage())
 			return
 		}
-		println("Create collection " + collectionName + " success")
+		log.Println("Create collection " + collectionName + " success")
 	}
 
 	hasCollection, status, err = drivers.MilvusDbConn.HasCollection(collectionName)
 	if err != nil {
-		println("HasCollection rpc failed: " + err.Error())
+		log.Println("HasCollection rpc failed: " + err.Error())
 		return
 	}
 	if hasCollection == false {
-		println("Create collection failed: " + status.GetMessage())
+		log.Println("Create collection failed: " + status.GetMessage())
 		return
 	}
-	println("Collection: " + collectionName + " exist")
+	log.Println("Collection: " + collectionName + " exist")
 }
 
 // 删除集合
@@ -67,10 +67,10 @@ func DropCollection(collectionName string) error {
 	status, _ := drivers.MilvusDbConn.DropCollection(collectionName)
 	hasCollection, status1, _ := drivers.MilvusDbConn.HasCollection(collectionName)
 	if !status.Ok() || !status1.Ok() || hasCollection == true {
-		println("Drop collection failed: " + status.GetMessage())
+		log.Println("Drop collection failed: " + status.GetMessage())
 		return errors.New(status.GetMessage())
 	}
-	println("Drop collection " + collectionName + " success!")
+	log.Println("Drop collection " + collectionName + " success!")
 
 	return nil
 }
@@ -80,34 +80,30 @@ func LoadCollection(collectionName string) error {
 	//Preload collection
 	status, err := drivers.MilvusDbConn.LoadCollection(collectionName)
 	if err != nil {
-		println("PreloadCollection rpc failed: " + err.Error())
+		log.Println("PreloadCollection rpc failed: " + err.Error())
 		return err
 	}
 	if !status.Ok() {
-		println(status.GetMessage())
+		log.Println(status.GetMessage())
 		return errors.New(status.GetMessage())
 	}
-	println("Preload collection success")
+	log.Printf("Preload collection[%s] success", collectionName)
 	return nil
 }
 
 // 返回所有集合collection
 func ListCollections() ([]string, error) {
-
 	collections, status, err := drivers.MilvusDbConn.ListCollections()
 	if err != nil {
-		println("ShowCollections rpc failed: " + err.Error())
+		log.Println("ShowCollections rpc failed: " + err.Error())
 		return nil, err
 	}
 
 	if !status.Ok() {
-		println("Show collections failed: " + status.GetMessage())
+		log.Println("Show collections failed: " + status.GetMessage())
 		return nil, errors.New(status.GetMessage())
 	}
-	println("ShowCollections: ")
-	for i := 0; i < len(collections); i++ {
-		println(" - " + collections[i])
-	}
+
 	return collections, nil
 }
 
@@ -116,17 +112,13 @@ func GetCollectionInfo(collectionName string) (int64, int64, error){
 	//test describe collection
 	collectionParam, status, err := drivers.MilvusDbConn.GetCollectionInfo(collectionName)
 	if err != nil {
-		println("DescribeCollection rpc failed: " + err.Error())
+		log.Println("DescribeCollection rpc failed: " + err.Error())
 		return 0, 0, err
 	}
 	if !status.Ok() {
-		println("Create index failed: " + status.GetMessage())
+		log.Println("Create index failed: " + status.GetMessage())
 		return 0, 0, errors.New(status.GetMessage())
 	}
-
-	println("CollectionName:" + collectionParam.CollectionName +
-		"----Dimension:" + strconv.Itoa(int(collectionParam.Dimension)) +
-		"----IndexFileSize:" + strconv.Itoa(int(collectionParam.IndexFileSize)))
 
 	return collectionParam.Dimension, collectionParam.IndexFileSize, nil
 }
@@ -134,29 +126,30 @@ func GetCollectionInfo(collectionName string) (int64, int64, error){
 /*
 创建分区
 通过标签将集合分割为若干个分区，从而提高搜索效率。每个分区实际上也是一个集合。
-
+一个集合最多创建4096个分区
+每个集合都有一个 _default 分区。插入数据时如果没有指定分区，Milvus 会将数据插入该分区中。
 */
 func CreatePartition(collectionName, PartitionTag string) error {
 
 	hasCollection, status, err := drivers.MilvusDbConn.HasCollection(collectionName)
 	if err != nil {
-		println("HasCollection rpc failed: " + err.Error())
+		log.Println("HasCollection rpc failed: " + err.Error())
 		return err
 	}
 
 	if hasCollection == false {
-		println(collectionName + " 不存在!")
+		log.Println(collectionName + " 不存在!")
 		return errors.New(status.GetMessage())
 	}
 
 	partitionParam := milvus.PartitionParam{collectionName, PartitionTag}
 	status, err = drivers.MilvusDbConn.CreatePartition(partitionParam)
 	if err != nil {
-		println("CreateCollection rpc failed: " + err.Error())
+		log.Println("CreateCollection rpc failed: " + err.Error())
 		return err
 	}
 	if !status.Ok() {
-		println("Create collection failed: " + status.GetMessage())
+		log.Println("Create collection failed: " + status.GetMessage())
 		return errors.New(status.GetMessage())
 	}
 
@@ -164,51 +157,77 @@ func CreatePartition(collectionName, PartitionTag string) error {
 }
 
 // 删除分区
-func DropPartition(collectionName, PartitionTag string) error {
-	partitionParam := milvus.PartitionParam{collectionName, PartitionTag}
+func DropPartition(collectionName, partitionTag string) error {
+	partitionParam := milvus.PartitionParam{collectionName, partitionTag}
 	//Drop Partition
 	status, err := drivers.MilvusDbConn.DropPartition(partitionParam)
 	if err != nil {
-		println("DropPartition rpc failed: " + err.Error())
+		log.Println("DropPartition rpc failed: " + err.Error())
 		return err
 	}
 	if !status.Ok() {
-		println("Create Partition failed: " + status.GetMessage())
+		log.Println("Create Partition failed: " + status.GetMessage())
 		return errors.New(status.GetMessage())
 	}
 
 	return nil
 }
 
-// 插入多个
-func InsertMany(collectionName, partitionTag string, records []milvus.Entity) ([]int64, error) {
+// 返回所有集合collection
+func ListPartitions(collectionName string) ([]string, error) {
+	partitionParams, status, err := drivers.MilvusDbConn.ListPartitions(collectionName)
+	if err != nil {
+		log.Println("ListPartitions rpc failed: " + err.Error())
+		return nil, err
+	}
 
+	if !status.Ok() {
+		log.Println("Show partitions failed: " + status.GetMessage())
+		return nil, errors.New(status.GetMessage())
+	}
+
+	var partitionNames []string
+	for _, param := range partitionParams {
+		partitionNames = append(partitionNames, param.PartitionTag)
+	}
+	return partitionNames, nil
+}
+
+/*
+数据批量插入
+单次插入的数据量不能大于 256 MB。插入数据的流程如下：
+	1.服务端接收到插入请求后，将数据写入预写日志（WAL）。
+	2.当预写日志成功记录后，返回插入操作。
+	3.将数据写入可写缓冲区（mutable buffer）。
+每个集合都有独立的可写缓冲区。每个可写缓冲区的容量上限是 128 MB。
+所有集合的可写缓冲区总容量上限由系统参数 insert_buffer_size 决定，默认是 1 GB。
+*/
+func Insert(collectionName, partitionTag string, records []milvus.Entity) ([]int64, error) {
 	insertParam := milvus.InsertParam{collectionName, partitionTag, records, nil}
 	id_array, status, err := drivers.MilvusDbConn.Insert(&insertParam)
 	if err != nil {
-		println("Insert rpc failed: " + err.Error())
+		log.Println("Insert rpc failed: " + err.Error())
 		return nil, err
 	}
 	if !status.Ok() {
-		println("Insert vector failed: " + status.GetMessage())
+		log.Println("Insert vector failed: " + status.GetMessage())
 		return nil, errors.New(status.GetMessage())
 	}
 	if len(id_array) != len(records) {
-		println("ERROR: return id array is null")
+		log.Println("ERROR: return id array is null")
 	}
-	println("Insert vectors success!")
 	return id_array, nil
 }
 
-// 根据ID删除特征向量
+// 根据ID批量删除特征向量
 func DeleteEntity(collectionName string, id_array []int64) error {
 	status, err := drivers.MilvusDbConn.DeleteEntityByID(collectionName, id_array)
 	if err != nil {
-		println("DeleteByID failed: " + err.Error())
+		log.Println("DeleteByID failed: " + err.Error())
 		return err
 	}
 	if !status.Ok() {
-		println("DeleteByID status check error: " + status.GetMessage())
+		log.Println("DeleteByID status check error: " + status.GetMessage())
 		return errors.New(status.GetMessage())
 	}
 	return nil
@@ -216,7 +235,16 @@ func DeleteEntity(collectionName string, id_array []int64) error {
 
 /*
 数据落盘
-Milvus 也会执行自动落盘。自动落盘会在固定的时间周期（1 秒）将所有现存集合的数据进行落盘操作。
+落盘操作的流程如下：
+	1.系统开辟一块新的可写缓冲区，用于容纳后续插入的数据。
+	2.系统将之前的可写缓冲区设为只读（immutable buffer）。
+	3.系统把只读缓冲区的数据写入磁盘，并将新数据段的描述信息写入元数据后端服务。
+完成以上流程后，系统就成功创建了一个数据段（segment）。
+
+自动触发:
+	1.定时触发, 定时间隔由系统参数 auto_flush_interval 决定，默认是 1 秒。
+	2.缓冲区达到上限触发, 累积数据达到可写缓冲区的上限（128MB）会触发落盘操作。
+
 在调用 delete 接口后，用户可以选择再调用 flush，保证新增的数据可见，被删除的数据不会再被搜到。
 
 为什么数据插入后不能马上被搜索到？ 因为数据还没有落盘。要确保数据插入后立刻能搜索到，可以手动调用 flush 接口。
@@ -225,11 +253,11 @@ Milvus 也会执行自动落盘。自动落盘会在固定的时间周期（1 �
 func Flush(collectionNames []string) error {
 	status, err := drivers.MilvusDbConn.Flush(collectionNames)
 	if err != nil {
-		println("Flush error: " + err.Error())
+		log.Println("Flush error: " + err.Error())
 		return err
 	}
 	if !status.Ok() {
-		println("Flush status check error: " + status.GetMessage())
+		log.Println("Flush status check error: " + status.GetMessage())
 		return errors.New(status.GetMessage())
 	}
 	return nil
@@ -244,11 +272,11 @@ func Flush(collectionNames []string) error {
 func Compact(collectionName string) error {
 	status, err := drivers.MilvusDbConn.Compact(collectionName)
 	if err != nil {
-		println("Compact error: " + err.Error())
+		log.Println("Compact error: " + err.Error())
 		return err
 	}
 	if !status.Ok() {
-		println("Compact status check error: " + status.GetMessage())
+		log.Println("Compact status check error: " + status.GetMessage())
 		return errors.New(status.GetMessage())
 	}
 	return nil
@@ -258,6 +286,7 @@ func Compact(collectionName string) error {
 /*
 搜索
 collectionName 在哪一个集合中搜索
+partitionTags 在哪集合下的哪些分区中搜索, 全部则可置为nil
 queryRecords	查询向量
 topk 搜索与查询向量相似度最高的前 topk 个结果
 查询向量是数组, 返回的结构体也是数组, 数组内各自包含了最多 topk 个结果
@@ -273,57 +302,82 @@ type QueryResult struct {
 	// Distances distance array
 	Distances []float32		//该数组长度<=topk
 }
+查询向量数据时，你可以根据标签来指定在某个分区的数据中进行查询。Milvus 既支持对分区标签的精确匹配，也支持正则表达式匹配。
 */
-func Search(collectionName string, queryRecords []milvus.Entity, topk int64) (milvus.TopkQueryResult, error) {
+func Search(collectionName string, partitionTags []string, queryRecords []milvus.Entity, topk int64) (milvus.TopkQueryResult, error) {
 
 	extraParams := "{\"nprobe\" : 32}"	//查询取的单元数	topk:查询返回的单元数
 	searchParam := milvus.SearchParam{
 		collectionName,
 		queryRecords,
 		topk,
-		nil,
+		partitionTags,
 		extraParams}
 
 	topkQueryResult, _, err := drivers.MilvusDbConn.Search(searchParam)
 	if err != nil {
-		println("Search rpc failed: " + err.Error())
+		log.Println("Search rpc failed: " + err.Error())
 		return topkQueryResult, err
 	}
 
 	return topkQueryResult, nil
 }
 
-// 查询集合总数
+// 查询集合总数 1秒耗时
 func Count(collectionName string) int64 {
 	collectionCount, status, err := drivers.MilvusDbConn.CountEntities(collectionName)
 	if err != nil {
-		println("CountCollection rpc failed: " + err.Error())
+		log.Println("CountCollection rpc failed: " + err.Error())
 		return -1
 	}
 	if !status.Ok() {
-		println("Get collection count failed: " + status.GetMessage())
+		log.Println("Get collection count failed: " + status.GetMessage())
 		return -2
 	}
-	println("Collection count:" + strconv.Itoa(int(collectionCount)))
 	return collectionCount
 }
 
-// 创建索引
-func CreateIndex(collectionName string, indexType milvus.IndexType) error {
-	println("Start create index...", indexType)
-	extraParams := "{\"nlist\" : 16384}"
-	indexParam := milvus.IndexParam{collectionName, indexType, extraParams}
+/*
+创建索引
+同时只能有一种索引, 创建时会自动把旧的索引文件删掉, 所以无需手动删除索引
+索引参数看这里: https://www.milvus.io/cn/docs/v0.10.4/index.md
+当插入的数据段少于 4096 行时，Milvus 不会为其建立索引。
+FLAT		N/A				查询数据规模小，对查询速度要求不高。需要 100% 的召回率。
+IVF_FLAT	基于量化的索引		高速查询，要求尽可能高的召回率。
+IVF_SQ8		基于量化的索引		高速查询，磁盘和内存资源有限，仅有 CPU 资源。
+IVF_SQ8H	基于量化的索引		高速查询，磁盘、内存、显存有限。
+IVF_PQ		基于量化的索引
+RNSG		基于图的索引
+HNSW		基于图的索引
+ANNOY		基于树的索引
+*/
+func CreateIndex(indexParam milvus.IndexParam) error {
+	log.Println("Start create index...", indexParam)
 	status, err := drivers.MilvusDbConn.CreateIndex(&indexParam)
 	if err != nil {
-		println("CreateIndex rpc failed: " + err.Error())
+		log.Println("CreateIndex rpc failed: " + err.Error())
 		return err
 	}
 	if !status.Ok() {
-		println("Create index failed: " + status.GetMessage())
+		log.Println("Create index failed: " + status.GetMessage())
 		return errors.New(status.GetMessage())
 	}
 
-	println("Create index success!")
+	log.Println("Create index success!")
+	return nil
+}
+
+//删除索引 会恢复成默认的FLAT索引
+func DropIndex(collectionName string) error {
+	status, err := drivers.MilvusDbConn.DropIndex(collectionName)
+	if err != nil {
+		log.Println("DropIndex rpc failed: " + err.Error())
+		return err
+	}
+	if !status.Ok() {
+		log.Println("Drop index failed: " + status.GetMessage())
+		return errors.New(status.GetMessage())
+	}
 	return nil
 }
 
@@ -332,29 +386,13 @@ func GetIndexInfo(collectionName string) (milvus.IndexParam, error) {
 	//Describe index
 	indexParam, status, err := drivers.MilvusDbConn.GetIndexInfo(collectionName)
 	if err != nil {
-		println("DescribeIndex rpc failed: " + err.Error())
+		log.Println("DescribeIndex rpc failed: " + err.Error())
 		return indexParam, err
 	}
 	if !status.Ok() {
-		println("Describe index failed: " + status.GetMessage())
+		log.Println("Describe index failed: " + status.GetMessage())
 	}
-	println(indexParam.CollectionName + "----index type:" + strconv.Itoa(int(indexParam.IndexType)))
 	return indexParam, nil
-}
-
-//删除索引
-func DropIndex(collectionName string) error {
-
-	status, err := drivers.MilvusDbConn.DropIndex(collectionName)
-	if err != nil {
-		println("DropIndex rpc failed: " + err.Error())
-		return err
-	}
-	if !status.Ok() {
-		println("Drop index failed: " + status.GetMessage())
-		return errors.New(status.GetMessage())
-	}
-	return nil
 }
 
 
