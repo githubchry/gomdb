@@ -20,7 +20,7 @@ func main() {
 	//========================================
 	mongoCfg := drivers.MongoCfg{
 		Addr:     "127.0.0.1",
-		Port:     17017,		// 默认27017
+		Port:     27017,		// 默认27017
 		Username: "chry",
 		Password: "chry",
 		DBName:   "chrydb",
